@@ -4,46 +4,27 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from dotenv import load_dotenv
 from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains.summarize import load_summarize_chain
-from langchain_community.document_loaders import PyPDFLoader
 from langchain_together import ChatTogether
-from langchain_together.embeddings import TogetherEmbeddings
 from langchain_core.prompts import PromptTemplate
 
 load_dotenv()
 api_key = os.getenv("TO_API_KEY")
-pdf_path = os.environ.get("pdf_path")
+process_key = os.getenv("api_key")
 
 llm = ChatTogether(
     api_key=api_key,
     model='mistralai/Mistral-7B-Instruct-v0.2'
 )
-embeddings = TogetherEmbeddings(model="togethercomputer/m2-bert-80M-8k-retrieval", api_key=api_key)
 
-def load_pdf(file_path: str):
-    loader = PyPDFLoader(file_path)
-    pages = loader.load()
-    text = "".join([page.page_content.replace('\t', ' ') for page in pages])
-    return text
+app = FastAPI()
 
-def split_text(text: str):
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "\n", "\t"], chunk_size=10000, chunk_overlap=3000)
-    docs = text_splitter.create_documents([text])
-    return docs
-
-def embed_documents(docs):
-    vectors = embeddings.embed_documents([x.page_content for x in docs])
-    return np.array(vectors)
-
-# Function to determine the optimal number of clusters using the Silhouette Score and Gap Statistic
 def determine_optimal_clusters(vectors, max_clusters=10):
     silhouette_scores = []
     gap_statistics = []
 
     max_clusters = min(max_clusters, vectors.shape[0] - 1)
-   # Calculate silhouette scores and gap statistics for different numbers of clusters
+
     for n_clusters in range(2, max_clusters + 1):
         kmeans = KMeans(n_clusters=n_clusters, random_state=40).fit(vectors)
         cluster_labels = kmeans.labels_
@@ -111,7 +92,7 @@ def combine_summaries(summaries):
 
     return reduce_chain.run([summaries])
 
-def format_summary(summary):
+def formatted_summary(summary):
     formatted_summary_prompt = """
     You will be given a verbose summary of a judgment enclosed in triple backticks (```). Your task is to elaborate
     and expand this summary into a structured format with appropriate headings and subheadings. Your summary should
@@ -128,23 +109,3 @@ def format_summary(summary):
                                            verbose=True)
 
     return formatted_chain.run([Document(page_content=summary)])
-
-def process_pdf(file_path: str):
-    text = load_pdf(file_path)
-    docs = split_text(text)
-    vectors = embed_documents(docs)
-    optimal_clusters_silhouette, _ = determine_optimal_clusters(vectors)
-    num_clusters = optimal_clusters_silhouette
-    sorted_indices = cluster_documents(vectors, num_clusters)
-    summaries = summarize_documents(docs, sorted_indices)
-    combined_summary = combine_summaries(summaries)
-    formatted_summary = format_summary(combined_summary)
-    return formatted_summary
-
-def main():
-    file_path = pdf_path  # Replace with the actual PDF file path
-    formatted_summary = process_pdf(file_path)
-    print(formatted_summary)
-
-if __name__ == "__main__":
-    main()

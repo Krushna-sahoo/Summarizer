@@ -17,8 +17,6 @@ llm = ChatTogether(
     model='mistralai/Mistral-7B-Instruct-v0.2'
 )
 
-app = FastAPI()
-
 def determine_optimal_clusters(vectors, max_clusters=10):
     silhouette_scores = []
     gap_statistics = []
